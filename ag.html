@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>더그란떼 메뉴 계산기</title>
+<style>
+body { font-family: 'Arial', sans-serif; margin: 0; padding: 0; text-align: center; background: #fff; color: #333; }
+header { background: #4caf50; color: white; padding: 15px 0; font-size: 22px; font-weight: bold; position: sticky; top: 0; z-index: 1000; }
+.container { padding: 20px; }
+h2 { margin-top: 30px; }
+table { width:100%; max-width:700px; margin:auto; border-collapse: collapse; margin-bottom:20px; }
+th, td { border:1px solid #ccc; padding:10px; text-align:center; }
+th { background:#f1f1f1; }
+input[type=number] { width:60px; padding:5px; border:1px solid #ccc; border-radius:6px; text-align:center; }
+button { padding: 6px 12px; font-size: 14px; border: none; border-radius: 8px; background: #4caf50; color: white; cursor: pointer; transition: 0.2s; }
+button:hover { background: #45a049; }
+.delete-btn { background: #e53935; }
+.delete-btn:hover { background: #d32f2f; }
+.reset { margin-top: 20px; background: #e53935; }
+.reset:hover { background: #d32f2f; }
+#total { font-size: 20px; font-weight: bold; margin-top: 20px; }
+.receipt, .history { margin-top: 30px; text-align: left; max-width: 500px; margin-left: auto; margin-right: auto; border: 1px solid #ccc; padding: 15px; border-radius: 10px; background: #f9f9f9; }
+.receipt h2, .history h3 { text-align: center; }
+.datetime { font-size: 14px; color: #555; text-align: center; margin-bottom: 10px; }
+.category-title { font-weight: bold; margin-top: 10px; }
+select { margin-top: 20px; padding: 10px; font-size: 16px; border-radius: 8px; }
+.history-entry { border:1px solid #ddd; padding:10px; border-radius:8px; margin-bottom:10px; background:#fafafa; }
+</style>
+</head>
+<body>
+<header>더그란떼 메뉴 계산기</header>
+<div class="container">
+
+<h2>🥤 음료</h2>
+<table id="drinkTable">
+  <thead>
+    <tr>
+      <th>메뉴</th>
+      <th>+1</th>
+      <th>수량 입력</th>
+      <th>추가</th>
+      <th>-1</th>
+    </tr>
+  </thead>
+  <tbody id="drinkBody"></tbody>
+</table>
+
+<h2>🍰 디저트</h2>
+<table id="dessertTable">
+  <thead>
+    <tr>
+      <th>메뉴</th>
+      <th>+1</th>
+      <th>수량 입력</th>
+      <th>추가</th>
+      <th>-1</th>
+    </tr>
+  </thead>
+  <tbody id="dessertBody"></tbody>
+</table>
+
+<div>
+  <label for="membership">멤버십 선택: </label>
+  <select id="membership">
+    <option value="0">없음</option>
+    <option value="0.05">베이직 (5% 할인)</option>
+    <option value="0.10">플러스 (10% 할인)</option>
+    <option value="0.12">프로 (12% 할인)</option>
+    <option value="0.15">프리미엄 (15% 할인)</option>
+    <option value="0.20">오리진 (20% 할인)</option>
+    <option value="0.25">코어 (25% 할인)</option>
+    <option value="1.00">인베스터 (100% 할인)</option>
+  </select>
+</div>
+
+<div id="total">총 금액: 0원</div>
+<button class="reset" onclick="resetTotal()">초기화</button>
+<button onclick="printReceipt()">영수증 출력</button>
+<button onclick="showHistory()">영수증 기록 보기</button>
+
+<div id="receipt" class="receipt" style="display:none;">
+  <h2>영수증</h2>
+  <div class="datetime" id="receiptDate"></div>
+  <div id="receiptList"></div>
+  <p id="receiptTotal"></p>
+  <p id="receiptDiscount"></p>
+  <p id="receiptFinal"></p>
+</div>
+
+<div id="history" class="history" style="display:none;">
+  <h3>📜 영수증 기록</h3>
+  <div style="text-align:center; margin-bottom:10px;">
+    <button onclick="deleteLastReceipt()">최근 영수증 삭제</button>
+    <button class="reset" onclick="clearHistory()">전체 기록 삭제</button>
+    <button onclick="undoDelete()">되돌리기</button>
+  </div>
+  <div id="historyList"></div>
+</div>
+
+<script>
+let total=0, items={}, lastDeleted=null;
+const drinks=[
+  {name:'아메리카노', price:7500},
+  {name:'카페라떼', price:5500},
+  {name:'딸기라떼', price:8000},
+  {name:'에스프레소', price:8000},
+  {name:'카라멜 마끼아또', price:8000},
+  {name:'민트초코라떼', price:6000},
+  {name:'레몬에이드', price:6000},
+  {name:'아이스티', price:6000}
+];
+const desserts=[
+  {name:'와플', price:7000},
+  {name:'티라미수 케이크', price:7500},
+  {name:'초코무스 케이크', price:7500},
+  {name:'마카롱', price:6100},
+  {name:'샌드위치', price:6900}
+];
+
+function renderMenu(){
+  const drinkBody=document.getElementById('drinkBody');
+  const dessertBody=document.getElementById('dessertBody');
+  drinkBody.innerHTML=''; dessertBody.innerHTML='';
+  drinks.forEach(d=>{
+    let tr=document.createElement('tr');
+    tr.innerHTML=`<td>${d.name} (${(d.price/1000).toFixed(1)})</td>
+      <td><button onclick="addItem('${d.name}',${d.price},'음료')">+1</button></td>
+      <td><input type="number" id="qty-${d.name}" value="1" min="1"></td>
+      <td><button onclick="addItemDirect('${d.name}',${d.price},'음료')">추가</button></td>
+      <td><button onclick="removeItem('${d.name}')">-1</button></td>`;
+    drinkBody.appendChild(tr);
+  });
+  desserts.forEach(d=>{
+    let tr=document.createElement('tr');
+    tr.innerHTML=`<td>${d.name} (${(d.price/1000).toFixed(1)})</td>
+      <td><button onclick="addItem('${d.name}',${d.price},'디저트')">+1</button></td>
+      <td><input type="number" id="qty-${d.name}" value="1" min="1"></td>
+      <td><button onclick="addItemDirect('${d.name}',${d.price},'디저트')">추가</button></td>
+      <td><button onclick="removeItem('${d.name}')">-1</button></td>`;
+    dessertBody.appendChild(tr);
+  });
+}
+
+function addItem(name,price,category){
+  if(items[name]) items[name].count++;
+  else items[name]={price,count:1,category};
+  total+=price;
+  updateDisplay();
+}
+
+function addItemDirect(name,price,category){
+  let qty=parseInt(document.getElementById("qty-"+name).value)||1;
+  if(items[name]) items[name].count+=qty;
+  else items[name]={price,count:qty,category};
+  total+=price*qty;
+  updateDisplay();
+}
+
+function removeItem(name){
+  if(!items[name]) return;
+  items[name].count--;
+  total-=items[name].price;
+  if(items[name].count<=0) delete items[name];
+  updateDisplay();
+}
+
+function updateDisplay(){document.getElementById('total').innerText=`총 금액: ${total.toLocaleString()}원`; }
+function resetTotal(){total=0; items={}; updateDisplay(); document.getElementById('receipt').style.display='none';}
+
+function printReceipt(){
+  const now=new Date();
+  const dateStr=now.toLocaleDateString('ko-KR');
+  const timeStr=now.toLocaleTimeString('ko-KR');
+  document.getElementById('receiptDate').innerText=`${dateStr} ${timeStr}`;
+  let receiptList=document.getElementById('receiptList'); receiptList.innerHTML='';
+  let categories={'음료':[],'디저트':[]};
+  for(let item in items){
+    let subtotal=items[item].price*items[item].count;
+    categories[items[item].category].push(`${item} × ${items[item].count} = ${subtotal.toLocaleString()}원`);
+  }
+  for(let cat in categories){
+    if(categories[cat].length>0){
+      let catTitle=document.createElement('p'); catTitle.className='category-title'; catTitle.innerText=`[${cat}]`;
+      receiptList.appendChild(catTitle);
+      let ul=document.createElement('ul');
+      categories[cat].forEach(txt=>{let li=document.createElement('li'); li.textContent=txt; ul.appendChild(li);});
+      receiptList.appendChild(ul);
+    }
+  }
+  let membership=parseFloat(document.getElementById('membership').value);
+  let discountAmount=total*membership;
+  let finalTotal=total-discountAmount;
+  document.getElementById('receiptTotal').innerText=`총 금액: ${total.toLocaleString()}원`;
+  document.getElementById('receiptDiscount').innerText=`할인 금액: ${discountAmount.toLocaleString()}원`;
+  document.getElementById('receiptFinal').innerText=`최종 결제 금액: ${finalTotal.toLocaleString()}원`;
+  document.getElementById('receipt').style.display='block';
+
+  // 영수증 기록 저장
+  let history=JSON.parse(localStorage.getItem('receiptHistory')||'[]');
+  history.push({date:`${dateStr} ${timeStr}`,items:Object.assign({},items),total,discountAmount,finalTotal});
+  localStorage.setItem('receiptHistory',JSON.stringify(history));
+}
+
+function showHistory(){
+  const historyDiv=document.getElementById('history');
+  const historyList=document.getElementById('historyList'); historyList.innerHTML='';
+  let history=JSON.parse(localStorage.getItem('receiptHistory')||'[]');
+  if(history.length===0) historyList.innerHTML='<p>저장된 영수증이 없습니다.</p>';
+  else history.forEach(rec=>{
+    let entry=document.createElement('div'); entry.className='history-entry';
+    entry.innerHTML=`<strong>${rec.date}</strong><br>`;
+    let categories={'음료':[],'디저트':[]};
+    for(let item in rec.items){
+      let subtotal=rec.items[item].price*rec.items[item].count;
+      categories[rec.items[item].category].push(`${item} × ${rec.items[item].count} = ${subtotal.toLocaleString()}원`);
+    }
+    for(let cat in categories){
+      if(categories[cat].length>0) entry.innerHTML+=`<p>[${cat}]</p><ul>${categories[cat].map(x=>`<li>${x}</li>`).join('')}</ul>`;
+    }
+    entry.innerHTML+=`총 금액: ${rec.total.toLocaleString()}원<br>할인 금액: ${rec.discountAmount.toLocaleString()}원<br>최종 결제 금액: ${rec.finalTotal.toLocaleString()}원`;
+    historyList.appendChild(entry);
+  });
+  historyDiv.style.display='block';
+}
+
+function deleteLastReceipt(){
+  let history=JSON.parse(localStorage.getItem('receiptHistory')||'[]');
+  if(history.length===0){alert('삭제할 영수증이 없습니다.'); return;}
+  lastDeleted=history.pop();
+  localStorage.setItem('receiptHistory',JSON.stringify(history));
+  showHistory();
+  alert('최근 영수증이 삭제되었습니다. 되돌리기를 눌러 복원할 수 있습니다.');
+}
+
+function clearHistory(){
+  let history=JSON.parse(localStorage.getItem('receiptHistory')||'[]');
+  if(history.length===0){alert('삭제할 기록이 없습니다.'); return;}
+  if(confirm('정말 전체 기록을 삭제하시겠습니까?')){
+    lastDeleted=history;
+    localStorage.removeItem('receiptHistory');
+    showHistory();
+    alert('전체 기록이 삭제되었습니다. 되돌리기를 눌러 복원할 수 있습니다.');
+  }
+}
+
+function undoDelete(){
+  if(!lastDeleted){alert('되돌릴 영수증이 없습니다.'); return;}
+  let history=JSON.parse(localStorage.getItem('receiptHistory')||'[]');
+  if(Array.isArray(lastDeleted)) history=history.concat(lastDeleted);
+  else history.push(lastDeleted);
+  localStorage.setItem('receiptHistory',JSON.stringify(history));
+  lastDeleted=null;
+  showHistory();
+  alert('삭제된 영수증이 복원되었습니다.');
+}
+
+renderMenu();
+</script>
+</body>
+</html>
